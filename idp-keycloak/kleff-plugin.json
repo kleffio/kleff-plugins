@@ -6,13 +6,17 @@
   "longDescription": "## Keycloak Identity Provider\n\nConnect Kleff to your Keycloak realm for enterprise-grade identity management.\n\n### Features\n- Direct Access Grant (headless login)\n- User registration via Keycloak Admin REST API\n- RS256 JWT verification via JWKS endpoint\n- Multi-realm support\n\n### Setup\n1. Create a Keycloak realm for Kleff (e.g. `kleff`).\n2. Create a confidential client with **Direct access grants** enabled.\n3. Create an admin service account or use the master realm admin credentials.\n4. Fill in the config fields below and click Install.",
   "tags": ["self-hosted", "sso", "enterprise", "open-source"],
   "author": "Kleff",
-  "repo": "https://github.com/kleff/idp-keycloak",
+  "repo": "https://github.com/kleffio/plugins/idp-keycloak",
   "docs": "https://docs.kleff.io/plugins/idp-keycloak",
-  "image": "ghcr.io/kleff/idp-keycloak",
+  "image": "ghcr.io/kleffio/idp-keycloak",
   "version": "1.0.0",
   "minKleffVersion": "0.5.0",
   "license": "MIT",
   "verified": true,
+  "capabilities": [
+    "identity.provider",
+    "ui.manifest"
+  ],
   "config": [
     {
       "key": "KEYCLOAK_URL",
@@ -57,6 +61,15 @@
       "label": "Admin Password",
       "type": "secret",
       "required": false
+    },
+    {
+      "key": "AUTH_MODE",
+      "label": "Login Mode",
+      "description": "headless — users log in via the Kleff panel form (uses Keycloak Direct Access Grants). redirect — users are redirected to the Keycloak login page via OIDC Authorization Code flow.",
+      "type": "select",
+      "options": ["headless", "redirect"],
+      "required": false,
+      "default": "headless"
     }
   ]
 }

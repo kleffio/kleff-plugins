@@ -3,7 +3,7 @@ module github.com/kleff/idp-keycloak
 go 1.25.0
 
 require (
-	github.com/kleff/platform v0.0.0
+	github.com/kleffio/plugin-sdk v0.0.0
 	google.golang.org/grpc v1.64.0
 )
 
@@ -15,4 +15,6 @@ require (
 	google.golang.org/protobuf v1.34.2 // indirect
 )
 
-replace github.com/kleff/platform => ../../platform
+replace github.com/kleffio/platform => ../../platform
+
+replace github.com/kleffio/plugin-sdk => ../../plugin-sdk

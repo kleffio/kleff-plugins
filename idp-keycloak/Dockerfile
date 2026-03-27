@@ -1,8 +1,8 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /build
 
-# Copy the platform module first (referenced by replace directive in go.mod)
-COPY platform/ platform/
+# Copy local module dependencies (referenced by replace directives in go.mod)
+COPY plugin-sdk/ plugin-sdk/
 
 # Copy the plugin source
 COPY plugins/idp-keycloak/ plugins/idp-keycloak/

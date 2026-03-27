@@ -1,63 +1,68 @@
-// Command plugin starts the idp-keycloak gRPC server.
+// Command plugin is the entrypoint for the idp-keycloak Kleff plugin.
+// It wires the hexagonal layers together and starts the gRPC server.
 package main
 
 import (
-	"log"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
-	pluginsv1 "github.com/kleff/platform/api/plugins/v1"
-	"github.com/kleff/idp-keycloak/internal/keycloak"
-	"github.com/kleff/idp-keycloak/internal/server"
+	pluginsv1 "github.com/kleffio/plugin-sdk/v1"
+	grpcadapter "github.com/kleff/idp-keycloak/internal/adapters/grpc"
+	"github.com/kleff/idp-keycloak/internal/adapters/keycloak"
+	"github.com/kleff/idp-keycloak/internal/core/application"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	port := env("PLUGIN_PORT", "50051")
-	level := slog.LevelInfo
-	if os.Getenv("LOG_LEVEL") == "debug" {
-		level = slog.LevelDebug
-	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
-	slog.SetDefault(logger)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	cfg := keycloak.Config{
+	// ── Infrastructure (outbound adapter) ─────────────────────────────────────
+	provider := keycloak.New(keycloak.Config{
 		BaseURL:       mustEnv("KEYCLOAK_URL"),
-		PublicBaseURL: os.Getenv("KEYCLOAK_PUBLIC_URL"), // browser-reachable URL; falls back to KEYCLOAK_URL
+		PublicBaseURL: env("KEYCLOAK_PUBLIC_URL", ""),
 		Realm:         env("KEYCLOAK_REALM", "master"),
 		ClientID:      env("KEYCLOAK_CLIENT_ID", "kleff-panel"),
-		ClientSecret:  os.Getenv("KEYCLOAK_CLIENT_SECRET"),
+		ClientSecret:  env("KEYCLOAK_CLIENT_SECRET", ""),
 		AdminUser:     env("KEYCLOAK_ADMIN_USER", "admin"),
-		AdminPassword: os.Getenv("KEYCLOAK_ADMIN_PASSWORD"),
-	}
+		AdminPassword: env("KEYCLOAK_ADMIN_PASSWORD", ""),
+		AuthMode:      env("AUTH_MODE", "headless"),
+	})
 
-	kc := keycloak.New(cfg)
-	srv := server.New(kc)
+	// ── Application layer ──────────────────────────────────────────────────────
+	svc := application.New(provider)
 
-	lis, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		log.Fatalf("listen :%s: %v", port, err)
-	}
+	// ── Inbound adapter (gRPC) ─────────────────────────────────────────────────
+	srv := grpcadapter.New(svc)
 
 	gs := grpc.NewServer()
 	pluginsv1.RegisterIdentityPluginServer(gs, srv)
 	pluginsv1.RegisterPluginHealthServer(gs, srv)
+	pluginsv1.RegisterPluginUIServer(gs, srv)
 
-	slog.Info("idp-keycloak plugin listening", "port", port,
-		"realm", cfg.Realm, "keycloak_url", cfg.BaseURL)
-
-	if err := gs.Serve(lis); err != nil {
-		log.Fatalf("serve: %v", err)
+	port := env("PLUGIN_PORT", "50051")
+	lis, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		logger.Error("listen failed", "error", err)
+		os.Exit(1)
 	}
-}
 
-func mustEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		log.Fatalf("required environment variable %s is not set", key)
-	}
-	return v
+	go func() {
+		logger.Info("plugin listening", "port", port)
+		if err := gs.Serve(lis); err != nil {
+			logger.Error("gRPC server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	<-stop
+	logger.Info("shutting down")
+	gs.GracefulStop()
 }
 
 func env(key, def string) string {
@@ -65,4 +70,13 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func mustEnv(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		fmt.Fprintf(os.Stderr, "required env var %s is not set\n", key)
+		os.Exit(1)
+	}
+	return v
 }
