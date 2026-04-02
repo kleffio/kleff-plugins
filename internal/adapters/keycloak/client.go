@@ -255,7 +255,10 @@ func (c *Client) EnsureRealm(ctx context.Context) error {
 	}
 	resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// realm already exists
+	case http.StatusNotFound:
 		// Create realm.
 		payload, _ := json.Marshal(map[string]any{
 			"realm":                 c.cfg.Realm,
@@ -275,6 +278,8 @@ func (c *Client) EnsureRealm(ctx context.Context) error {
 		if resp.StatusCode != http.StatusCreated {
 			return fmt.Errorf("ensure realm: create realm: status %d", resp.StatusCode)
 		}
+	default:
+		return fmt.Errorf("ensure realm: check realm: unexpected status %d", resp.StatusCode)
 	}
 
 	// Check if kleff-panel client exists.
