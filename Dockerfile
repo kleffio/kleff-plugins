@@ -13,5 +13,6 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /plugin /plugin
 
+ENV PLUGIN_PORT=50051
 EXPOSE 50051
 ENTRYPOINT ["/plugin"]

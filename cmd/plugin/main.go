@@ -27,7 +27,7 @@ func main() {
 	provider := keycloak.New(keycloak.Config{
 		BaseURL:       env("KEYCLOAK_URL", "http://keycloak:8080"),
 		PublicBaseURL: env("KEYCLOAK_PUBLIC_URL", ""),
-		Realm:         env("KEYCLOAK_REALM", "master"),
+		Realm:         env("KEYCLOAK_REALM", "kleff"),
 		ClientID:      env("KEYCLOAK_CLIENT_ID", "kleff-panel"),
 		ClientSecret:  env("KEYCLOAK_CLIENT_SECRET", ""),
 		AdminUser:     env("KEYCLOAK_ADMIN_USER", "admin"),

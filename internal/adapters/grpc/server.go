@@ -110,6 +110,13 @@ func (s *Server) RefreshToken(ctx context.Context, req *pluginsv1.RefreshTokenRe
 	return &pluginsv1.RefreshTokenResponse{Token: toTokenSet(tok)}, nil
 }
 
+func (s *Server) EnsureAdmin(ctx context.Context, _ *pluginsv1.EnsureAdminRequest) (*pluginsv1.EnsureAdminResponse, error) {
+	if err := s.svc.EnsureAdmin(ctx); err != nil {
+		return &pluginsv1.EnsureAdminResponse{Error: toPluginError(err)}, nil
+	}
+	return &pluginsv1.EnsureAdminResponse{}, nil
+}
+
 // ── PluginUI ──────────────────────────────────────────────────────────────────
 
 func (s *Server) GetUIManifest(_ context.Context, _ *pluginsv1.GetUIManifestRequest) (*pluginsv1.GetUIManifestResponse, error) {

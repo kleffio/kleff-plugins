@@ -29,4 +29,8 @@ type IDPProvider interface {
 	// RefreshToken exchanges a refresh token for a new token set.
 	// Returns ErrUnauthorized if the refresh token is invalid or expired.
 	RefreshToken(ctx context.Context, refreshToken string) (*domain.TokenSet, error)
+
+	// EnsureAdmin seeds the admin user and assigns the "admin" realm role.
+	// Idempotent — safe to call on every startup or on demand.
+	EnsureAdmin(ctx context.Context) error
 }
