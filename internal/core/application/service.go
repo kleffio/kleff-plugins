@@ -44,3 +44,9 @@ func (s *Service) OIDCConfig() domain.OIDCConfig {
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*domain.TokenSet, error) {
 	return s.provider.RefreshToken(ctx, refreshToken)
 }
+
+// EnsureAdmin seeds the admin user and assigns the "admin" realm role.
+func (s *Service) EnsureAdmin(ctx context.Context) error {
+	return s.provider.EnsureAdmin(ctx)
+}
+

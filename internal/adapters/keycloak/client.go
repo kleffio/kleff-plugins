@@ -313,6 +313,109 @@ func (c *Client) EnsureRealm(ctx context.Context) error {
 		}
 	}
 
+	// Seed the admin user and assign the "admin" realm role.
+	// Idempotent — safe to call on every startup.
+	if err := c.EnsureAdmin(ctx); err != nil {
+		fmt.Printf("warning: ensure realm: failed to ensure admin: %v\n", err)
+	}
+
+	return nil
+}
+
+// EnsureAdmin creates the admin user (if absent) and assigns the platform
+// "admin" realm role to them. Credentials are read from the client's config.
+// Must be called by the platform after the plugin is installed and healthy.
+// Safe to call multiple times (idempotent).
+func (c *Client) EnsureAdmin(ctx context.Context) error {
+	tok, err := c.adminToken(ctx)
+	if err != nil {
+		return fmt.Errorf("ensure admin: admin token: %w", err)
+	}
+
+	base := strings.TrimRight(c.cfg.BaseURL, "/")
+
+	// Ensure the admin role exists in the realm.
+	rolesURL := fmt.Sprintf("%s/admin/realms/%s/roles/admin", base, c.cfg.Realm)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, rolesURL, nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("ensure admin: check admin role: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		payload, _ := json.Marshal(map[string]any{"name": "admin", "description": "Platform administrator"})
+		req, _ = http.NewRequestWithContext(ctx, http.MethodPost,
+			fmt.Sprintf("%s/admin/realms/%s/roles", base, c.cfg.Realm),
+			strings.NewReader(string(payload)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tok)
+		resp, err = c.http.Do(req)
+		if err != nil {
+			return fmt.Errorf("ensure admin: create admin role: %w", err)
+		}
+		resp.Body.Close()
+	}
+
+	// Seed the admin user (ignore conflict — user already exists).
+	_, err = c.Register(ctx, domain.RegisterRequest{
+		Username:  c.cfg.AdminUser,
+		Password:  c.cfg.AdminPassword,
+		Email:     c.cfg.AdminUser + "@localhost",
+		FirstName: "Admin",
+		LastName:  "Account",
+	})
+	if err != nil {
+		if _, ok := err.(*domain.ErrConflict); !ok {
+			return fmt.Errorf("ensure admin: seed admin user: %w", err)
+		}
+	}
+
+	// Assign the admin realm role to the admin user.
+	return c.assignAdminRole(ctx, tok, base)
+}
+
+// assignAdminRole looks up the admin user by username and grants them the admin realm role.
+func (c *Client) assignAdminRole(ctx context.Context, tok, base string) error {
+	// Fetch the admin role representation.
+	roleURL := fmt.Sprintf("%s/admin/realms/%s/roles/admin", base, c.cfg.Realm)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, roleURL, nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	roleBody, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	// Find the admin user ID.
+	userURL := fmt.Sprintf("%s/admin/realms/%s/users?username=%s&exact=true", base, c.cfg.Realm, c.cfg.AdminUser)
+	req, _ = http.NewRequestWithContext(ctx, http.MethodGet, userURL, nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err = c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	userBody, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	var users []map[string]any
+	if err := json.Unmarshal(userBody, &users); err != nil || len(users) == 0 {
+		return fmt.Errorf("admin user not found")
+	}
+	userID, _ := users[0]["id"].(string)
+
+	// Assign role (idempotent — Keycloak ignores duplicates).
+	assignURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", base, c.cfg.Realm, userID)
+	req, _ = http.NewRequestWithContext(ctx, http.MethodPost, assignURL,
+		strings.NewReader(fmt.Sprintf("[%s]", string(roleBody))))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err = c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 	return nil
 }
 
