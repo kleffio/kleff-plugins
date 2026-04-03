@@ -9,7 +9,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -36,6 +36,11 @@ jobs:
           tags: |
             ghcr.io/kleffio/idp-keycloak:${{ steps.version.outputs.version }}
             ghcr.io/kleffio/idp-keycloak:latest
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
 
       - name: Generate app token
         id: app-token
