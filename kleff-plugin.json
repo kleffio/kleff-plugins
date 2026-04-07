@@ -30,7 +30,8 @@
       "label": "Public URL",
       "description": "Browser-reachable Keycloak URL. Only needed if internal and public URLs differ (e.g. behind a reverse proxy).",
       "type": "url",
-      "required": false
+      "required": false,
+      "advanced": true
     },
     {
       "key": "KEYCLOAK_REALM",
@@ -78,6 +79,7 @@
       "type": "select",
       "options": ["headless", "redirect"],
       "required": false,
+      "advanced": true,
       "default": "headless"
     }
   ],
