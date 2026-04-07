@@ -340,9 +340,10 @@ func (c *Client) EnsureRealm(ctx context.Context) error {
 	}
 
 	// Seed the admin user and assign the "admin" realm role.
-	// Idempotent — safe to call on every startup.
+	// Return the error so the startup retry loop keeps trying — the loading
+	// screen must not clear (ready: true) until the admin user actually exists.
 	if err := c.EnsureAdmin(ctx); err != nil {
-		fmt.Printf("warning: ensure realm: failed to ensure admin: %v\n", err)
+		return fmt.Errorf("ensure admin: %w", err)
 	}
 
 	return nil
