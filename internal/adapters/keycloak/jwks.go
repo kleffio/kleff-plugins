@@ -16,8 +16,9 @@ func (c *Client) ValidateToken(ctx context.Context, rawToken string) (*domain.To
 		return nil, &domain.ErrUnauthorized{Msg: err.Error()}
 	}
 	return &domain.TokenClaims{
-		Subject: claims.Subject,
-		Email:   claims.Email,
-		Roles:   claims.Roles,
+		Subject:  claims.Subject,
+		Username: claims.Username,
+		Email:    claims.Email,
+		Roles:    claims.Roles,
 	}, nil
 }
