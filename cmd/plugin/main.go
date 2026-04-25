@@ -38,23 +38,6 @@ func main() {
 		PanelURL:      env("PANEL_URL", ""),
 	})
 
-	// ── Ensure Keycloak realm is configured (retry until Keycloak is ready) ───
-	setupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	for {
-		if err := provider.EnsureRealm(setupCtx); err == nil {
-			break
-		} else {
-			logger.Warn("waiting for Keycloak to be ready...", "error", err)
-		}
-		select {
-		case <-setupCtx.Done():
-			logger.Error("timed out waiting for Keycloak to be ready")
-			os.Exit(1)
-		case <-time.After(5 * time.Second):
-		}
-	}
-
 	// ── Application layer ──────────────────────────────────────────────────────
 	svc := application.New(provider)
 
@@ -76,9 +59,10 @@ func main() {
 	}
 
 	gs := grpc.NewServer(serverOpts...)
-	pluginsv1.RegisterIdentityPluginServer(gs, srv)
+	pluginsv1.RegisterIdentityProviderServer(gs, srv)
+	pluginsv1.RegisterIdentityFrameworkServer(gs, srv)
 	pluginsv1.RegisterPluginHealthServer(gs, srv)
-	pluginsv1.RegisterPluginUIServer(gs, srv)
+	pluginsv1.RegisterUIManifestServiceServer(gs, srv)
 
 	port := env("PLUGIN_PORT", "50051")
 	lis, err := net.Listen("tcp", ":"+port)
@@ -87,11 +71,33 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Start gRPC immediately so the platform can dial while setup is in progress.
 	go func() {
 		logger.Info("plugin listening", "port", port)
 		if err := gs.Serve(lis); err != nil {
 			logger.Error("gRPC server error", "error", err)
 			os.Exit(1)
+		}
+	}()
+
+	// ── Ensure Keycloak realm is configured in the background ─────────────────
+	go func() {
+		setupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		for {
+			if err := provider.EnsureRealm(setupCtx); err == nil {
+				logger.Info("Keycloak configured")
+				srv.SetReady()
+				return
+			} else {
+				logger.Warn("waiting for Keycloak to be ready...", "error", err)
+			}
+			select {
+			case <-setupCtx.Done():
+				logger.Error("timed out waiting for Keycloak to be ready")
+				os.Exit(1)
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}()
 
